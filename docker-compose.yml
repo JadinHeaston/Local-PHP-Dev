@@ -1,0 +1,92 @@
+version: "3.9"
+
+name: local-PHP-dev
+services:
+  php:
+    build:
+      context: ./php/
+      args:
+        PHP_VERSION: ${PHP_VERSION}
+    container_name: php
+    healthcheck:
+      test: "curl --fail http://localhost/health.php || exit 1"
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    init: true
+    networks:
+      - backend
+    restart: unless-stopped
+    # user: "phpdev:phpdev"
+    volumes:
+      - ./app/:/var/www/html/
+      - phpmyadmin-data:/var/www/html/phpmyadmin/:ro
+  reverse-proxy:
+    build:
+      context: ./apache/
+      args:
+        APACHE_VERSION: ${APACHE_VERSION}
+    container_name: apache
+    depends_on:
+      - php
+      - db
+    healthcheck:
+      test: "curl --fail http://localhost/ || exit 1"
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    networks:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    volumes:
+      - ./app/:/usr/local/apache2/htdocs/
+      - phpmyadmin-data:/usr/local/apache2/htdocs/phpmyadmin/:ro
+      - ${APACHE_CONFIG_PATH:-./apache/apache.conf}:/usr/local/apache2/conf/apache.conf
+  db:
+    image: mysql:${MYSQL_VERSION}
+    container_name: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    expose:
+      - "3306"
+    networks:
+      - backend
+    ports:
+      - "3306:3306"
+    volumes:
+      - database-data:/var/lib/mysql
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:fpm-alpine
+    container_name: phpmyadmin
+    depends_on:
+      - db
+      - php
+    environment:
+      PMA_ARBITRARY: 1
+    networks:
+      - backend
+    restart: unless-stopped
+    volumes:
+      - phpmyadmin-data:/var/www/html/
+      - /sessions
+
+networks:
+  frontend:
+    external: false
+  backend:
+    internal: true
+    external: false
+
+volumes:
+  database-data:
+  phpmyadmin-data:
