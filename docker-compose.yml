@@ -61,8 +61,6 @@ services:
       - "3306"
     networks:
       - backend
-    ports:
-      - "3306:3306"
     volumes:
       - database-data:/var/lib/mysql
   phpmyadmin:
